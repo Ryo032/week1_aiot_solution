@@ -1,0 +1,19 @@
+services:
+  aiot_app:
+    build: .
+    container_name: aiot_cleaner_app
+    depends_on:
+      - aiot_db
+    networks:
+      - aiot_net
+
+  aiot_db:
+    image: redis:alpine
+    container_name: aiot_redis_db
+    volumes:
+      - ./db_data:/data
+    networks:
+      - aiot_net
+
+networks:
+  aiot_net:

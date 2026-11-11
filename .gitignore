@@ -3,3 +3,5 @@ __pycache__/
 .ipynb_checkpoints/
 images_raw/
 images_processed/
+db_data/
+images_contours/

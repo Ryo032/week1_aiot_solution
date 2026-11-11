@@ -1,0 +1,6 @@
+BÁO CÁO NGÀY: 04/11/2026 22:56
+- Tổng số bản ghi hợp lệ: 3
+- Giá trị cảm biến trung bình: 25.15
+- Thống kê trạng thái (Status): {'OK': 2, 'ERROR': 1}
+=> Trạng thái: Đã tổng hợp và sẵn sàng gửi Email cho Quản đốc.
+----------------------------------------
