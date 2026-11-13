@@ -5,3 +5,6 @@ images_raw/
 images_processed/
 db_data/
 images_contours/
+*.db
+
+*.log
