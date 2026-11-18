@@ -1,0 +1,56 @@
+# ==============================================================================
+# KHỐI 1: BUILD SYSTEM (Chuẩn PEP 517 & PEP 518)
+# Khai báo công cụ nền (Build Backend) dùng để đóng gói mã nguồn thành thư viện.
+# Giải quyết bài toán "Con gà và quả trứng" của file setup.py lỗi thời.
+# ==============================================================================
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+# ==============================================================================
+# KHỐI 2: PROJECT METADATA (Chuẩn PEP 621)
+# Khai báo thông tin định danh của gói thư viện và các thư viện phụ thuộc.
+# Khi chạy 'pip install -e .', pip sẽ đọc khối này để đăng ký gói 'aiot_pkg'.
+# ==============================================================================
+[project]
+name = "aiot_pkg"
+version = "0.1.0"
+description = "Thu vien xu ly dong thoi va kiem tra cam bien AIoT chuan PEP 621"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "numpy",
+]
+
+# Chỉ định rõ cho setuptools chỉ đóng gói thư mục 'aiot_pkg'
+# (Tránh lỗi khi trong thư mục gốc có nhiều file .py rời rạc từ các tuần trước)
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aiot_pkg*"]
+
+# ==============================================================================
+# KHỐI 3: CẤU HÌNH RUFF (Hợp nhất Linter & Formatter viết bằng Rust)
+# Thay thế cho cả 3 công cụ cũ: Flake8 + Black + isort
+# ==============================================================================
+[tool.ruff]
+line-length = 110           # Giới hạn độ dài dòng code tối đa 88 ký tự (chuẩn Black/PEP 8)
+target-version = "py310"   # Kiểm tra tương thích cú pháp với Python 3.10
+
+[tool.ruff.lint]
+# Chọn các bộ quy tắc quét lỗi của Linter (ruff check):
+# - "E", "F": Bắt lỗi cú pháp PEP 8 và biến thừa/import thừa (Pyflakes / pycodestyle)
+# - "I": Kiểm tra và sắp xếp thứ tự khối lệnh import theo chuẩn bảng chữ cái (isort)
+# - "UP": Gợi ý nâng cấp lên cú pháp Python hiện đại (pyupgrade)
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+# ==============================================================================
+# KHỐI 4: CẤU HÌNH MYPY (Static Type Checker - Kiểm tra kiểu dữ liệu tĩnh)
+# Bắt lỗi truyền sai kiểu dữ liệu dựa trên Type Hints ngay trước khi chạy code
+# ==============================================================================
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true          # Cảnh báo nếu hàm có kiểu trả về bị suy biến thành 'Any'
+warn_unused_configs = true      # Cảnh báo nếu có dòng cấu hình mypy bị dư thừa
+disallow_untyped_defs = true    # BẮT BUỘC mọi hàm (def) phải ghi rõ Type Hints đầu vào & đầu ra!
+ignore_missing_imports = true   # Bỏ qua cảnh báo với các thư viện ngoài chưa có file stub kiểu

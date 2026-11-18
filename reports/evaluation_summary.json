@@ -1,0 +1,35 @@
+{
+  "dataset_summary": {
+    "total_test_samples": 600,
+    "positive_ratio": 0.08333333333333333
+  },
+  "metrics": {
+    "roc_auc": 0.9275,
+    "pr_auc": 0.7837,
+    "brier_score_before_calibration": 0.0621,
+    "brier_score_after_calibration": 0.0338,
+    "f1_at_default_0.5": 0.716,
+    "optimal_threshold": 0.4161,
+    "f1_at_optimal_threshold": 0.7294,
+    "precision_at_optimal": 0.8857,
+    "recall_at_optimal": 0.62
+  },
+  "explainability": {
+    "mean_abs_shap": {
+      "temp_celsius": 0.0989,
+      "vibration_mms": 0.0405,
+      "pressure_bar": 0.0138,
+      "current_amp": 0.0777,
+      "humidity_pct": 0.0999,
+      "noise_db": 0.0496
+    },
+    "permutation_importance": {
+      "temp_celsius": 0.4246,
+      "vibration_mms": 0.0954,
+      "pressure_bar": 0.0007,
+      "current_amp": 0.1509,
+      "humidity_pct": 0.4289,
+      "noise_db": 0.117
+    }
+  }
+}
