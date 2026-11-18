@@ -4,3 +4,21 @@ BÁO CÁO NGÀY: 04/11/2026 22:56
 - Thống kê trạng thái (Status): {'OK': 2, 'ERROR': 1}
 => Trạng thái: Đã tổng hợp và sẵn sàng gửi Email cho Quản đốc.
 ----------------------------------------
+BÁO CÁO NGÀY: 12/11/2026 17:06
+- Tổng số bản ghi hợp lệ: 3
+- Giá trị cảm biến trung bình: 25.15
+- Thống kê trạng thái (Status): {'OK': 2, 'ERROR': 1}
+=> Trạng thái: Đã tổng hợp và sẵn sàng gửi Email cho Quản đốc.
+----------------------------------------
+BÁO CÁO NGÀY: 13/11/2026 17:00
+- Tổng số bản ghi hợp lệ: 3
+- Giá trị cảm biến trung bình: 25.15
+- Thống kê trạng thái (Status): {'OK': 2, 'ERROR': 1}
+=> Trạng thái: Đã tổng hợp và sẵn sàng gửi Email cho Quản đốc.
+----------------------------------------
+BÁO CÁO NGÀY: 17/11/2026 17:13
+- Tổng số bản ghi hợp lệ: 3
+- Giá trị cảm biến trung bình: 25.15
+- Thống kê trạng thái (Status): {'OK': 2, 'ERROR': 1}
+=> Trạng thái: Đã tổng hợp và sẵn sàng gửi Email cho Quản đốc.
+----------------------------------------
