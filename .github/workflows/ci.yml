@@ -22,13 +22,17 @@ jobs:
       - name: 3. Cai dat thu vien va cong cu kiem tra (ruff, pytest)
         run: |
           pip install -r requirements.txt
-          pip install ruff pytest
+          pip install ruff mypy pytest
+          pip install -e .
 
       - name: 4. Kiem tra chat luong code (Linter voi Ruff)
-        run: ruff check test_solution.py
+        run: |
+          ruff check test_solution.py
+          ruff format --check aiot_pkg test_solution.py
+          mypy aiot_pkg test_solution.py
 
       - name: 5. Chay kiem thu tu dong (Unit Test voi Pytest)
-        run: pytest test_solution.py
+        run: pytest -v test_solution.py
 
   build-docker-image:
     runs-on: ubuntu-latest
