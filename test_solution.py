@@ -14,6 +14,7 @@ from aiot_pkg import (
     run_threaded_io_tasks,
     validate_reading,
 )
+from cv_yolo_custom import compute_iou, generate_custom_yolo_dataset
 from model_evaluation_report import run_full_evaluation_pipeline
 
 
@@ -73,3 +74,21 @@ def test_model_evaluation_report_pipeline(tmp_path: Path) -> None:
     assert (tmp_path / "roc_pr_calibration.png").exists()
     assert (tmp_path / "shap_feature_importance.png").exists()
     assert (tmp_path / "evaluation_summary.json").exists()
+
+
+def test_cv_iou_and_yolo_dataset_format(tmp_path: Path) -> None:
+    """6. Kiểm thử công thức IoU và cấu trúc dữ liệu tự gán nhãn chuẩn YOLO."""
+    # Kiểm chứng khớp đúng bài toán tính tay ở Tầng 3: IoU = 6400 / 13600 ≈ 0.4706
+    iou_val = compute_iou((100, 100, 200, 200), (120, 120, 220, 220))
+    assert abs(iou_val - (6400 / 13600)) < 1e-4
+
+    # Kiểm chứng bộ sinh dữ liệu YOLO tạo đủ ảnh, nhãn chuẩn hóa (0..1) và dataset.yaml
+    yaml_path = generate_custom_yolo_dataset(base_dir=str(tmp_path), n_train=4, n_val=2)
+    assert yaml_path.exists()
+    sample_lbl = tmp_path / "labels" / "train" / "sample_000.txt"
+    assert sample_lbl.exists()
+    first_line_parts = sample_lbl.read_text(encoding="utf-8").splitlines()[0].split()
+    assert len(first_line_parts) == 5
+    # Đảm bảo tọa độ đã chuẩn hóa về đoạn [0, 1]
+    coords = [float(v) for v in first_line_parts[1:]]
+    assert all(0.0 <= c <= 1.0 for c in coords)
