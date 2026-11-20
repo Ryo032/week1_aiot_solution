@@ -15,6 +15,12 @@ from aiot_pkg import (
     validate_reading,
 )
 from cv_yolo_custom import compute_iou, generate_custom_yolo_dataset
+from idp_invoice_pipeline import (
+    InvoiceData,
+    compute_cer,
+    evaluate_and_route_idp,
+    run_idp_pipeline,
+)
 from model_evaluation_report import run_full_evaluation_pipeline
 
 
@@ -92,3 +98,32 @@ def test_cv_iou_and_yolo_dataset_format(tmp_path: Path) -> None:
     # Đảm bảo tọa độ đã chuẩn hóa về đoạn [0, 1]
     coords = [float(v) for v in first_line_parts[1:]]
     assert all(0.0 <= c <= 1.0 for c in coords)
+
+
+def test_idp_cer_and_stp_hitl_routing(tmp_path: Path) -> None:
+    """7. Kiểm thử công thức CER, định tuyến STP/HITL và pipeline IDP đầu-cuối."""
+    # Kiểm chứng khớp đúng bài toán tính tay ở Tầng 3: CER = 2 / 10 = 0.20
+    assert abs(compute_cer("0312845679", "031234569") - 0.20) < 1e-6
+
+    # Kiểm chứng trường hợp HD-003: Confidence cao (0.91) nhưng lệch tiền -> Vẫn phải chặn sang HITL
+    bad_invoice = InvoiceData(
+        invoice_number="HD-003",
+        tax_id="0312845679",
+        invoice_date="2026-11-21",
+        subtotal=8_000_000.0,
+        vat_amount=640_000.0,
+        total_amount=3_640_000.0,
+    )
+    routed = evaluate_and_route_idp("hd_003.png", bad_invoice, [0.95, 0.91])
+    assert routed.math_valid is False
+    assert routed.routing_decision == "HITL_HUMAN_REVIEW"
+
+    # Chạy pipeline thực tế trên 2 ảnh hóa đơn sinh tự động
+    results = run_idp_pipeline(
+        sample_dir=str(tmp_path / "samples"),
+        report_dir=str(tmp_path / "reports"),
+    )
+    assert len(results) == 2
+    assert results[0].routing_decision == "STP_AUTO_APPROVE"
+    assert results[1].routing_decision == "HITL_HUMAN_REVIEW"
+    assert (tmp_path / "reports" / "idp_invoice_results.json").exists()

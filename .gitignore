@@ -20,3 +20,5 @@ yolo_custom_data/
 runs/
 runs_yolo/
 *.pt
+
+idp_samples/
