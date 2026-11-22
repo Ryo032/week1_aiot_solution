@@ -1,0 +1,38 @@
+[
+  {
+    "source_file": "invoice_stp.png",
+    "invoice": {
+      "invoice_number": "HD-2026-001",
+      "tax_id": "0312845679",
+      "invoice_date": "2026-11-21",
+      "subtotal": 10000000.0,
+      "vat_amount": 800000.0,
+      "total_amount": 10800000.0
+    },
+    "min_confidence": 0.9554,
+    "avg_confidence": 0.9871,
+    "math_valid": true,
+    "tax_id_valid": true,
+    "routing_decision": "STP_AUTO_APPROVE",
+    "review_reasons": []
+  },
+  {
+    "source_file": "invoice_hitl.png",
+    "invoice": {
+      "invoice_number": "HD-2026-003",
+      "tax_id": "0312845679",
+      "invoice_date": "2026-11-21",
+      "subtotal": 8000000.0,
+      "vat_amount": 640000.0,
+      "total_amount": 3640000.0
+    },
+    "min_confidence": 0.9876,
+    "avg_confidence": 0.9928,
+    "math_valid": false,
+    "tax_id_valid": true,
+    "routing_decision": "HITL_HUMAN_REVIEW",
+    "review_reasons": [
+      "Lech toan hoc: Subtotal (8000000) + VAT (640000) != Total (3640000)"
+    ]
+  }
+]

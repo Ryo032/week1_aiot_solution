@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
 
 # Import trực tiếp từ gói thư viện 'aiot_pkg' (đã được đăng ký vào môi trường ảo
 # thông qua lệnh 'pip install -e .' mà không cần dùng thủ thuật sys.path.append)
@@ -14,6 +15,14 @@ from aiot_pkg import (
     run_threaded_io_tasks,
     validate_reading,
 )
+from cv_yolo_custom import compute_iou, generate_custom_yolo_dataset
+from idp_invoice_pipeline import (
+    InvoiceData,
+    compute_cer,
+    evaluate_and_route_idp,
+    run_idp_pipeline,
+)
+from inference_service import app as inference_app
 from model_evaluation_report import run_full_evaluation_pipeline
 
 
@@ -73,3 +82,106 @@ def test_model_evaluation_report_pipeline(tmp_path: Path) -> None:
     assert (tmp_path / "roc_pr_calibration.png").exists()
     assert (tmp_path / "shap_feature_importance.png").exists()
     assert (tmp_path / "evaluation_summary.json").exists()
+
+
+def test_cv_iou_and_yolo_dataset_format(tmp_path: Path) -> None:
+    """6. Kiểm thử công thức IoU và cấu trúc dữ liệu tự gán nhãn chuẩn YOLO."""
+    # Kiểm chứng khớp đúng bài toán tính tay ở Tầng 3: IoU = 6400 / 13600 ≈ 0.4706
+    iou_val = compute_iou((100, 100, 200, 200), (120, 120, 220, 220))
+    assert abs(iou_val - (6400 / 13600)) < 1e-4
+
+    # Kiểm chứng bộ sinh dữ liệu YOLO tạo đủ ảnh, nhãn chuẩn hóa (0..1) và dataset.yaml
+    yaml_path = generate_custom_yolo_dataset(base_dir=str(tmp_path), n_train=4, n_val=2)
+    assert yaml_path.exists()
+    sample_lbl = tmp_path / "labels" / "train" / "sample_000.txt"
+    assert sample_lbl.exists()
+    first_line_parts = sample_lbl.read_text(encoding="utf-8").splitlines()[0].split()
+    assert len(first_line_parts) == 5
+    # Đảm bảo tọa độ đã chuẩn hóa về đoạn [0, 1]
+    coords = [float(v) for v in first_line_parts[1:]]
+    assert all(0.0 <= c <= 1.0 for c in coords)
+
+
+def test_idp_cer_and_stp_hitl_routing(tmp_path: Path) -> None:
+    """7. Kiểm thử công thức CER, định tuyến STP/HITL và pipeline IDP đầu-cuối."""
+    # Kiểm chứng khớp đúng bài toán tính tay ở Tầng 3: CER = 2 / 10 = 0.20
+    assert abs(compute_cer("0312845679", "031234569") - 0.20) < 1e-6
+
+    # Kiểm chứng trường hợp HD-003: Confidence cao (0.91) nhưng lệch tiền -> Vẫn phải chặn sang HITL
+    bad_invoice = InvoiceData(
+        invoice_number="HD-003",
+        tax_id="0312845679",
+        invoice_date="2026-11-21",
+        subtotal=8_000_000.0,
+        vat_amount=640_000.0,
+        total_amount=3_640_000.0,
+    )
+    routed = evaluate_and_route_idp("hd_003.png", bad_invoice, [0.95, 0.91])
+    assert routed.math_valid is False
+    assert routed.routing_decision == "HITL_HUMAN_REVIEW"
+
+    # Chạy pipeline thực tế trên 2 ảnh hóa đơn sinh tự động
+    results = run_idp_pipeline(
+        sample_dir=str(tmp_path / "samples"),
+        report_dir=str(tmp_path / "reports"),
+    )
+    assert len(results) == 2
+    assert results[0].routing_decision == "STP_AUTO_APPROVE"
+    assert results[1].routing_decision == "HITL_HUMAN_REVIEW"
+    assert (tmp_path / "reports" / "idp_invoice_results.json").exists()
+
+
+def test_inference_service_versioning_cache_and_validation() -> None:
+    """8. Kiểm thử dịch vụ suy luận: Versioning, Dynamic Batching, Cache-Aside & Validation."""
+    with TestClient(inference_app) as client:
+        # 1. Kiểm tra /health nạp đủ 2 phiên bản
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert set(health.json()["loaded_versions"]) == {"v1.0.0", "v2.0.0"}
+
+        # 2. Gọi lần 1 (Cache Miss) với X-Request-ID và phiên bản v2.0.0
+        headers = {"X-Request-ID": "trace-week6-001", "X-Model-Version": "v2.0.0"}
+        res1 = client.post(
+            "/v1/predict",
+            json={"temperature": 45.0, "vibration": 10.0},
+            headers=headers,
+        )
+        assert res1.status_code == 200
+        assert res1.headers["X-Request-ID"] == "trace-week6-001"
+        body1 = res1.json()
+        assert body1["model_version"] == "v2.0.0"
+        assert body1["cache_hit"] is False
+        assert body1["label"] == "CRITICAL_FAULT"
+
+        # 3. Gọi lần 2 cùng đầu vào & phiên bản -> Phải trúng Cache (Cache Hit)
+        res2 = client.post(
+            "/v1/predict",
+            json={"temperature": 45.0, "vibration": 10.0},
+            headers=headers,
+        )
+        assert res2.status_code == 200
+        assert res2.json()["cache_hit"] is True
+
+        # 4. Đổi sang v1.0.0 cùng đầu vào -> Phải Cache Miss (không bị Cache Pollution)
+        res_v1 = client.post(
+            "/v1/predict",
+            json={"temperature": 45.0, "vibration": 10.0},
+            headers={"X-Model-Version": "v1.0.0"},
+        )
+        assert res_v1.status_code == 200
+        assert res_v1.json()["model_version"] == "v1.0.0"
+        assert res_v1.json()["cache_hit"] is False
+
+        # 5. Kiểm tra lỗi 404 (sai phiên bản) và 422 (nhiệt độ vượt biên vật lý)
+        res_404 = client.post(
+            "/v1/predict",
+            json={"temperature": 30.0, "vibration": 5.0},
+            headers={"X-Model-Version": "v9.9.9"},
+        )
+        assert res_404.status_code == 404
+
+        res_422 = client.post(
+            "/v1/predict",
+            json={"temperature": 999.0, "vibration": 5.0},
+        )
+        assert res_422.status_code == 422
