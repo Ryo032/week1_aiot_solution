@@ -2,6 +2,7 @@ import asyncio
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
@@ -24,6 +25,7 @@ from idp_invoice_pipeline import (
 )
 from inference_service import app as inference_app
 from model_evaluation_report import run_full_evaluation_pipeline
+from transformer_text_classifier import scaled_dot_product_attention
 
 
 # Lưu ý: Vì trong pyproject.toml đã bật cờ 'disallow_untyped_defs = true' của mypy,
@@ -185,3 +187,22 @@ def test_inference_service_versioning_cache_and_validation() -> None:
             json={"temperature": 999.0, "vibration": 5.0},
         )
         assert res_422.status_code == 422
+
+
+def test_transformer_scaled_dot_product_attention() -> None:
+    """9. Kiểm thử công thức Scaled Dot-Product Self-Attention & Causal Masking (khớp Tầng 3)."""
+    q = np.array([[1.0, 0.0, 1.0, 0.0], [0.0, 2.0, 0.0, 2.0]])
+    k = np.array([[1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0]])
+    v = np.array([[10.0, 0.0], [0.0, 20.0]])
+
+    # 1. Kiểm tra Bidirectional Attention khớp đúng bài toán tính tay ở Tầng 3
+    output, weights = scaled_dot_product_attention(q, k, v, causal_mask=False)
+    assert output.shape == (2, 2)
+    assert np.allclose(weights.sum(axis=-1), 1.0)
+    assert abs(output[0, 0] - 7.3106) < 1e-2
+    assert abs(output[0, 1] - 5.3788) < 1e-2
+
+    # 2. Kiểm tra Causal Masking (Decoder LLM): từ đầu tiên không được nhìn từ thứ 2
+    _, causal_weights = scaled_dot_product_attention(q, k, v, causal_mask=True)
+    assert causal_weights[0, 1] < 1e-6
+    assert abs(causal_weights[0, 0] - 1.0) < 1e-6
