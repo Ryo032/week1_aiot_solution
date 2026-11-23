@@ -2,6 +2,7 @@ import asyncio
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,7 @@ from aiot_pkg import (
     run_threaded_io_tasks,
     validate_reading,
 )
+from cv_clip_zeroshot import clip_zeroshot_classify
 from cv_yolo_custom import compute_iou, generate_custom_yolo_dataset
 from idp_invoice_pipeline import (
     InvoiceData,
@@ -24,6 +26,7 @@ from idp_invoice_pipeline import (
 )
 from inference_service import app as inference_app
 from model_evaluation_report import run_full_evaluation_pipeline
+from transformer_text_classifier import scaled_dot_product_attention
 
 
 # Lưu ý: Vì trong pyproject.toml đã bật cờ 'disallow_untyped_defs = true' của mypy,
@@ -185,3 +188,48 @@ def test_inference_service_versioning_cache_and_validation() -> None:
             json={"temperature": 999.0, "vibration": 5.0},
         )
         assert res_422.status_code == 422
+
+
+def test_transformer_scaled_dot_product_attention() -> None:
+    """9. Kiểm thử công thức Scaled Dot-Product Self-Attention & Causal Masking (khớp Tầng 3)."""
+    q = np.array([[1.0, 0.0, 1.0, 0.0], [0.0, 2.0, 0.0, 2.0]])
+    k = np.array([[1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0]])
+    v = np.array([[10.0, 0.0], [0.0, 20.0]])
+
+    # 1. Kiểm tra Bidirectional Attention khớp đúng bài toán tính tay ở Tầng 3
+    output, weights = scaled_dot_product_attention(q, k, v, causal_mask=False)
+    assert output.shape == (2, 2)
+    assert np.allclose(weights.sum(axis=-1), 1.0)
+    assert abs(output[0, 0] - 7.3106) < 1e-2
+    assert abs(output[0, 1] - 5.3788) < 1e-2
+
+    # 2. Kiểm tra Causal Masking (Decoder LLM): từ đầu tiên không được nhìn từ thứ 2
+    _, causal_weights = scaled_dot_product_attention(q, k, v, causal_mask=True)
+    assert causal_weights[0, 1] < 1e-6
+    assert abs(causal_weights[0, 0] - 1.0) < 1e-6
+
+
+def test_clip_zeroshot_cosine_and_softmax() -> None:
+    """10. Kiểm thử công thức chuẩn hóa L2, Cosine Similarity & Softmax của CLIP Zero-shot."""
+    img_emb = np.array([0.8, 0.6, 0.0], dtype=np.float64)
+    txt_embs = np.array(
+        [
+            [0.9, 0.436, 0.0],
+            [0.2, 0.980, 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    labels = ["worker with safety helmet", "worker without helmet", "fire or smoke"]
+
+    # 1. Khớp đúng bài toán tính tay ở Tầng 3 (~91.17% cho nhãn 1)
+    results = clip_zeroshot_classify(img_emb, txt_embs, labels, logit_scale=10.0)
+    assert results[0]["label"] == "worker with safety helmet"
+    assert abs(results[0]["cosine_similarity"] - 0.9816) < 1e-3
+    assert abs(results[0]["probability"] - 0.9117) < 1e-2
+    assert abs(sum(r["probability"] for r in results) - 1.0) < 1e-3
+
+    # 2. Kiểm tra bất biến theo độ dài vector (nhân 5x vẫn ra đúng cùng xác suất nhờ chuẩn hóa L2)
+    scaled_results = clip_zeroshot_classify(img_emb * 5.0, txt_embs, labels, logit_scale=10.0)
+    assert scaled_results[0]["label"] == results[0]["label"]
+    assert abs(scaled_results[0]["probability"] - results[0]["probability"]) < 1e-4
