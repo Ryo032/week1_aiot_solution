@@ -16,6 +16,7 @@ from aiot_pkg import (
     run_threaded_io_tasks,
     validate_reading,
 )
+from cv_clip_zeroshot import clip_zeroshot_classify
 from cv_yolo_custom import compute_iou, generate_custom_yolo_dataset
 from idp_invoice_pipeline import (
     InvoiceData,
@@ -206,3 +207,29 @@ def test_transformer_scaled_dot_product_attention() -> None:
     _, causal_weights = scaled_dot_product_attention(q, k, v, causal_mask=True)
     assert causal_weights[0, 1] < 1e-6
     assert abs(causal_weights[0, 0] - 1.0) < 1e-6
+
+
+def test_clip_zeroshot_cosine_and_softmax() -> None:
+    """10. Kiểm thử công thức chuẩn hóa L2, Cosine Similarity & Softmax của CLIP Zero-shot."""
+    img_emb = np.array([0.8, 0.6, 0.0], dtype=np.float64)
+    txt_embs = np.array(
+        [
+            [0.9, 0.436, 0.0],
+            [0.2, 0.980, 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    labels = ["worker with safety helmet", "worker without helmet", "fire or smoke"]
+
+    # 1. Khớp đúng bài toán tính tay ở Tầng 3 (~91.17% cho nhãn 1)
+    results = clip_zeroshot_classify(img_emb, txt_embs, labels, logit_scale=10.0)
+    assert results[0]["label"] == "worker with safety helmet"
+    assert abs(results[0]["cosine_similarity"] - 0.9816) < 1e-3
+    assert abs(results[0]["probability"] - 0.9117) < 1e-2
+    assert abs(sum(r["probability"] for r in results) - 1.0) < 1e-3
+
+    # 2. Kiểm tra bất biến theo độ dài vector (nhân 5x vẫn ra đúng cùng xác suất nhờ chuẩn hóa L2)
+    scaled_results = clip_zeroshot_classify(img_emb * 5.0, txt_embs, labels, logit_scale=10.0)
+    assert scaled_results[0]["label"] == results[0]["label"]
+    assert abs(scaled_results[0]["probability"] - results[0]["probability"]) < 1e-4
