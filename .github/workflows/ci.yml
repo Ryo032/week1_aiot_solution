@@ -27,9 +27,9 @@ jobs:
 
       - name: 4. Kiem tra chat luong code va kieu tinh (Ruff & Mypy)
         run: |
-          ruff check aiot_pkg model_evaluation_report.py cv_yolo_custom.py idp_invoice_pipeline.py inference_service.py transformer_text_classifier.py cv_clip_zeroshot.py test_solution.py
-          ruff format --check aiot_pkg model_evaluation_report.py cv_yolo_custom.py idp_invoice_pipeline.py inference_service.py transformer_text_classifier.py cv_clip_zeroshot.py test_solution.py
-          mypy aiot_pkg model_evaluation_report.py cv_yolo_custom.py idp_invoice_pipeline.py inference_service.py transformer_text_classifier.py cv_clip_zeroshot.py test_solution.py
+          ruff check aiot_pkg model_evaluation_report.py cv_yolo_custom.py idp_invoice_pipeline.py inference_service.py transformer_text_classifier.py cv_clip_zeroshot.py ai_email_router.py test_solution.py
+          ruff format --check aiot_pkg model_evaluation_report.py cv_yolo_custom.py idp_invoice_pipeline.py inference_service.py transformer_text_classifier.py cv_clip_zeroshot.py ai_email_router.py test_solution.py
+          mypy aiot_pkg model_evaluation_report.py cv_yolo_custom.py idp_invoice_pipeline.py inference_service.py transformer_text_classifier.py cv_clip_zeroshot.py ai_email_router.py test_solution.py
 
       - name: 5. Chay kiem thu tu dong (Unit Test voi Pytest)
         run: pytest -v test_solution.py
@@ -41,7 +41,7 @@ jobs:
       - name: 1. Keo ma nguon
         uses: actions/checkout@v4
 
-      - name: 2. Build Multi-stage Docker Image va Gan Tag v1.2.2
+      - name: 2. Build Multi-stage Docker Image va Gan Tag v1.2.3
         run: |
-          docker build -t aiot-cleaner:v1.2.2 -t aiot-cleaner:sha-${{ github.sha }} .
+          docker build -t aiot-cleaner:v1.2.3 -t aiot-cleaner:sha-${{ github.sha }} .
           docker images | grep aiot-cleaner
