@@ -34,6 +34,7 @@ from idp_invoice_pipeline import (
 )
 from inference_service import app as inference_app
 from model_evaluation_report import run_full_evaluation_pipeline
+from pilot_config import audit_pilot_compose, load_secret
 from transformer_text_classifier import scaled_dot_product_attention
 
 
@@ -293,3 +294,41 @@ def test_ai_email_router_rag_rrf_and_hitl() -> None:
     )
     attack_res = run_email_routing_workflow(attack_mail)
     assert attack_res.execution_status == "BLOCKED_INJECTION"
+
+
+def test_pilot_deployment_secrets_and_compose_security(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """12. Kiểm thử cơ chế đọc Docker Secrets (*_FILE) và kiểm toán docker-compose.pilot.yml."""
+    # 1. Kiểm thử ưu tiên đọc Secret từ tệp (/run/secrets/...) cao hơn biến môi trường
+    secret_file = tmp_path / "api_secret_key.txt"
+    secret_file.write_text("  super-secret-pilot-token-2026\n", encoding="utf-8")
+
+    monkeypatch.setenv("AI_API_KEY", "plain-env-fallback")
+    monkeypatch.setenv("AI_API_KEY_FILE", str(secret_file))
+    assert load_secret("AI_API_KEY") == "super-secret-pilot-token-2026"
+
+    # 2. Khi không có tệp *_FILE, hệ thống lùi về đọc biến môi trường an toàn
+    monkeypatch.delenv("AI_API_KEY_FILE")
+    assert load_secret("AI_API_KEY") == "plain-env-fallback"
+
+    # 3. Kiểm toán tệp docker-compose.pilot.yml thật trong kho lưu trữ đạt 0 vi phạm
+    assert audit_pilot_compose("docker-compose.pilot.yml") == []
+
+    # 4. Kiểm chứng bộ kiểm toán bắt đúng lỗi khi Redis mở cổng trần và thiếu internal: true
+    bad_compose = tmp_path / "bad-compose.yml"
+    bad_compose.write_text(
+        "services:\n"
+        "  redis-cache:\n"
+        "    image: redis:7-alpine\n"
+        "    ports:\n"
+        "      - '6379:6379'\n"
+        "networks:\n"
+        "  internal_net:\n"
+        "    driver: bridge\n",
+        encoding="utf-8",
+    )
+    bad_issues = audit_pilot_compose(bad_compose)
+    assert any("internal: true" in msg for msg in bad_issues)
+    assert any("redis-cache" in msg and "ports" in msg for msg in bad_issues)

@@ -22,3 +22,7 @@ runs_yolo/
 *.pt
 
 idp_samples/
+
+.env
+.env.pilot
+secrets/
