@@ -1,0 +1,31 @@
+# ==============================================================================
+# CẤU HÌNH REVERSE PROXY & HTTPS TỰ ĐỘNG CHO MÔI TRƯỜNG PILOT
+# Đọc tên miền từ biến PILOT_DOMAIN (mặc định localhost khi thử nghiệm cục bộ)
+# ==============================================================================
+{$PILOT_DOMAIN:localhost} {
+    # Nén phản hồi JSON/HTML tự động để giảm băng thông mạng
+    encode zstd gzip
+
+    # Nới giới hạn kích thước gói tin lên 15MB (tránh lỗi 413 khi gửi ảnh camera/PDF)
+    request_body {
+        max_size 15MB
+    }
+
+    # Chuyển tiếp lưu lượng vào dịch vụ AI trong mạng nội bộ Docker
+    reverse_proxy ai-inference:8000 {
+        # Bảo toàn địa chỉ IP gốc và giao thức HTTPS của khách hàng cho lớp Rate Limit & Log
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        transport http {
+            read_timeout 60s
+            dial_timeout 5s
+        }
+    }
+
+    # Bổ sung tiêu đề bảo mật trình duyệt cơ bản
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+}

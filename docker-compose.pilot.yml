@@ -1,0 +1,136 @@
+# ==============================================================================
+# CẤU HÌNH TRIỂN KHAI PILOT / STAGING (NGÀY 5 - TUẦN 6)
+# Kiến trúc: Reverse Proxy (Caddy) ở biên + AI Inference & Redis trong mạng nội bộ
+# ==============================================================================
+services:
+  caddy-proxy:
+    image: caddy:2-alpine
+    container_name: aiot_pilot_caddy
+    restart: unless-stopped
+    # Chỉ duy nhất Reverse Proxy được phép mở cổng 80/443 ra ngoài máy chủ Host
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - PILOT_DOMAIN=${PILOT_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # Chờ dịch vụ AI nạp xong mô hình và báo trạng thái healthy mới nhận lưu lượng
+    depends_on:
+      ai-inference:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.25
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Nằm ở biên nên gắn đồng thời mạng công khai (edge_net) và mạng nội bộ (internal_net)
+    networks:
+      - edge_net
+      - internal_net
+
+  ai-inference:
+    build: .
+    image: aiot-cleaner:${APP_VERSION:-v1.2.4}
+    container_name: aiot_pilot_inference
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "inference_service:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
+    # Chỉ công bố cổng trong nội bộ Docker, tuyệt đối không dùng 'ports' mở ra Internet
+    expose:
+      - "8000"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MODEL_VERSION=${MODEL_VERSION:-v1.2.4}
+      - REDIS_URL=redis://redis-cache:6379/0
+      # Trỏ tới đường dẫn tệp Secret nằm trong bộ nhớ RAM ảo của Container
+      - AI_API_KEY_FILE=/run/secrets/api_secret_key
+    secrets:
+      - api_secret_key
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+    # Khám sức khỏe thực tế vào endpoint /health, cho phép khởi động lạnh 25 giây
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    # Khóa trần tài nguyên để cô lập sự cố tràn RAM không làm chết máy chủ VPS
+    mem_limit: 2048m
+    cpus: 1.0
+    stop_grace_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - internal_net
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: aiot_pilot_redis
+    restart: unless-stopped
+    # Giới hạn bộ nhớ nội bộ 256MB (thấp hơn mem_limit 320m) và tự dọn khóa ít dùng
+    command:
+      [
+        "redis-server",
+        "--maxmemory",
+        "256mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    mem_limit: 320m
+    cpus: 0.25
+    volumes:
+      - redis_pilot_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - internal_net
+
+secrets:
+  api_secret_key:
+    file: ./secrets/api_secret_key.txt
+
+networks:
+  edge_net:
+    driver: bridge
+  internal_net:
+    driver: bridge
+    # Khóa cô lập hoàn toàn mạng nội bộ, không cấp đường ra Internet trực tiếp
+    internal: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  redis_pilot_data:
